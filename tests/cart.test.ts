@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { calculateTotals,linePrice,validEmail,validPhone,statusLabels,timeline } from '../src/lib/utils';
+import type { CartLine,Coupon } from '../src/lib/types';
+const line={key:'test',food:{id:'burger',price:229},quantity:2,variant:{id:'regular',name:'Regular',price:0},addons:[],spice:'Medium',instructions:''} as unknown as CartLine;
+const coupon:Coupon={code:'FIRSTBITE',title:'First bite',description:'',minimum:399,type:'fixed',value:100,maxDiscount:100};
+test('cart prices include quantity, variant and addons',()=>{assert.equal(linePrice({...line,variant:{id:'large',name:'Large',price:80},addons:[{id:'cheese',name:'Cheese',price:30}]}),678);});
+test('empty cart never charges delivery or tax',()=>assert.deepEqual(calculateTotals([]),{subtotal:0,discount:0,tax:0,delivery:0,total:0}));
+test('discount is applied before tax and delivery',()=>assert.deepEqual(calculateTotals([line],coupon),{subtotal:458,discount:100,tax:17.9,delivery:35,total:410.9}));
+test('coupon minimum is enforced after quantity changes',()=>assert.equal(calculateTotals([{...line,quantity:1}],coupon).discount,0));
+test('percentage coupons respect the cap',()=>assert.equal(calculateTotals([{...line,quantity:5}],{...coupon,type:'percentage',value:20,maxDiscount:150}).discount,150));
+test('contact validation rejects malformed inputs',()=>{assert.equal(validEmail('alex@example.com'),true);assert.equal(validEmail('alex@'),false);assert.equal(validPhone('9876543210'),true);assert.equal(validPhone('123'),false);});
+test('the order timeline includes all seven real milestones',()=>{assert.equal(timeline.length,7);assert.equal(timeline[6],'delivered');for(const status of timeline)assert.ok(statusLabels[status]);});

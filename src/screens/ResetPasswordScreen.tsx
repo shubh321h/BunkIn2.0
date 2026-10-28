@@ -1,0 +1,7 @@
+import React,{useState} from 'react';
+import {View} from 'react-native';
+import {router} from 'expo-router';
+import {supabase} from '../lib/supabase';
+import {messageOf} from '../lib/utils';
+import {Button,Field,Notice,Panel,SectionTitle,layout} from '../components/ui';
+export default function ResetPasswordScreen(){const [password,setPassword]=useState('');const [confirmation,setConfirmation]=useState('');const [error,setError]=useState('');const [busy,setBusy]=useState(false);const reset=async()=>{if(password.length<8||password!==confirmation){setError('Use at least 8 characters and make sure the passwords match.');return;}if(!supabase){setError('Authentication is not configured. Nothing has been changed.');return;}setBusy(true);try{const {data}=await supabase.auth.getSession();if(!data.session)throw new Error('Open the secure reset link from your email before changing your password.');const {error}=await supabase.auth.updateUser({password});if(error)throw error;router.replace('/account');}catch(e){setError(messageOf(e));}finally{setBusy(false);}};return <View style={[layout.content,{maxWidth:550}]}><Panel><SectionTitle title="A fresh start." subtitle="Choose a new secure password for your account."/><Field label="New password" secureTextEntry value={password} onChangeText={setPassword}/><Field label="Confirm password" secureTextEntry value={confirmation} onChangeText={setConfirmation}/>{!!error&&<Notice kind="error">{error}</Notice>}<Button title="Update password" onPress={reset} loading={busy}/></Panel></View>;}

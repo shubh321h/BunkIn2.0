@@ -1,0 +1,12 @@
+import React,{useState} from 'react';
+import {FlatList,Pressable,View} from 'react-native';
+import {api} from '../lib/api';
+import {MenuCategory} from '../lib/types';
+import {messageOf} from '../lib/utils';
+import {useApp} from '../context/AppContext';
+import {Button,Field,Icon,Notice,Sheet,Txt,useColors} from './ui';
+export default function CategoryManager(){const c=useColors();const {notify}=useApp();const [open,setOpen]=useState(false);const [data,setData]=useState<MenuCategory[]>([]);const [selected,setSelected]=useState<MenuCategory>({id:'',name:''});const [busy,setBusy]=useState(false);const [error,setError]=useState('');
+ const load=async()=>{setBusy(true);setError('');try{setData(await api.owner.categories());}catch(e){setError(messageOf(e));}finally{setBusy(false);}};
+ const save=async()=>{if(selected.name.trim().length<2){setError('Category names need at least two characters.');return;}setBusy(true);setError('');try{await api.owner.saveCategory(selected);setSelected({id:'',name:''});notify('Category saved by the kitchen.','success');await load();}catch(e){setError(messageOf(e));}finally{setBusy(false);}};
+ return <><Button title="Manage categories" small icon="albums-outline" variant="secondary" style={{alignSelf:'flex-start',marginVertical:15}} onPress={()=>{setOpen(true);load();}}/><Sheet visible={open} title="A place for every flavor." subtitle="Create and organize your menu categories." onClose={()=>setOpen(false)}><FlatList data={data} scrollEnabled={false} keyExtractor={c=>c.id} renderItem={({item})=><Pressable onPress={()=>setSelected(item)} style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingVertical:13,borderBottomWidth:1,borderBottomColor:c.line}}><Txt weight="semibold" style={{fontSize:12,color:c.ink}}>{item.name}</Txt><Icon name="create-outline" size={18} color={c.green}/></Pressable>}/><View style={{marginTop:24}}><Field label={selected.id?'Edit category name':'New category name'} value={selected.name} onChangeText={name=>setSelected({...selected,name})}/><Field label="Category image URL (optional)" value={selected.image||''} autoCapitalize="none" onChangeText={image=>setSelected({...selected,image})}/>{!!error&&<Notice kind="error">{error}</Notice>}<View style={{flexDirection:'row',gap:10}}>{selected.id&&<Button title="New category" variant="secondary" onPress={()=>setSelected({id:'',name:''})}/>}<Button title="Save category" loading={busy} onPress={save} style={{flex:1}}/></View></View></Sheet></>;
+}
