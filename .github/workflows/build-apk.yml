@@ -1,55 +1,93 @@
-
 name: Build BunkIn Android APK
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
+workflow_dispatch:
+push:
+branches:
+- main
 
 permissions:
-  contents: read
+contents: read
+
+concurrency:
+group: bunkin-android-build-${{ github.ref }}
+cancel-in-progress: false
 
 jobs:
-  build-apk:
-    name: Build Debug APK
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+build-apk:
+name: Build Standalone Release APK
+runs-on: ubuntu-latest
+timeout-minutes: 90
 
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+```
+steps:
+  - name: Checkout Repository
+    uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+  - name: Setup Node.js
+    uses: actions/setup-node@v4
+    with:
+      node-version: "22"
+      cache: npm
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
+  - name: Setup Java 17
+    uses: actions/setup-java@v4
+    with:
+      distribution: temurin
+      java-version: "17"
+      cache: gradle
 
-      - name: Install Dependencies
-        run: npm ci
+  - name: Verify Project Files
+    run: |
+      test -f package.json
+      test -f package-lock.json
+      test -f app.json || test -f app.config.js || test -f app.config.ts
+      echo "Project files verified."
 
-      - name: Generate Android Project
-        run: npx expo prebuild --platform android --non-interactive
+  - name: Install Dependencies
+    run: npm ci
 
-      - name: Make Gradle Executable
-        run: chmod +x android/gradlew
+  - name: Validate Expo Configuration
+    run: npx expo config --type public
 
-      - name: Build APK
-        working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
-        env:
-          JAVA_TOOL_OPTIONS: "-Xmx4g -XX:MaxMetaspaceSize=1g"
+  - name: Generate Android Native Project
+    run: npx expo prebuild --platform android --non-interactive
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: BunkIn-Android-APK
-          path: android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 14
+  - name: Verify Android Gradle Wrapper
+    run: |
+      test -f android/gradlew
+      chmod +x android/gradlew
+
+  - name: Build Standalone Release APK
+    working-directory: android
+    run: ./gradlew --no-daemon --stacktrace :app:assembleRelease
+    env:
+      CI: "1"
+      JAVA_TOOL_OPTIONS: "-Xmx4g -XX:MaxMetaspaceSize=1g"
+
+  - name: Verify APK and JavaScript Bundle
+    run: |
+      APK="android/app/build/outputs/apk/release/app-release.apk"
+
+      if [ ! -f "$APK" ]; then
+        echo "::error::Release APK was not generated."
+        find android/app/build/outputs -type f -name "*.apk" 2>/dev/null || true
+        exit 1
+      fi
+
+      if ! unzip -l "$APK" | grep -Eq 'assets/index\.android\.bundle|assets/.*\.hbc'; then
+        echo "::error::Could not find the expected embedded JavaScript bundle in the APK."
+        unzip -l "$APK" | grep -E 'assets/|\.bundle|\.hbc' || true
+        exit 1
+      fi
+
+      echo "Standalone APK and JavaScript bundle verified."
+      ls -lh "$APK"
+
+  - name: Upload Release APK
+    uses: actions/upload-artifact@v4
+    with:
+      name: BunkIn-Standalone-Release-APK
+      path: android/app/build/outputs/apk/release/app-release.apk
+      if-no-files-found: error
+      retention-days: 14
