@@ -1,0 +1,4 @@
+project_id = "bunkin"
+
+[functions.api]
+verify_jwt = false
