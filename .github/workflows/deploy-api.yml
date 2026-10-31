@@ -2,7 +2,7 @@ name: Deploy API
 
 # Deploys the BunkIn API (Supabase Edge Function "api"). Run it from the Actions tab, or it runs by itself
 # whenever something under supabase/functions/api changes on main.
-# Needs two repository SECRETS: SUPABASE_ACCESS_TOKEN and SUPABASE_PROJECT_ID.
+# Needs. two repository SECRETS: SUPABASE_ACCESS_TOKEN and SUPABASE_PROJECT_ID.
 on:
   workflow_dispatch:
   push:
