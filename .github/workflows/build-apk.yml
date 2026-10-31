@@ -1,6 +1,5 @@
 name: Build BunkIn APK
 
-
 on:
   workflow_dispatch:
   push:
@@ -15,9 +14,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
+    # App settings from Settings > Secrets and variables > Actions > Variables.
+    # They are baked into the app when it is built, so changing one needs a new build.
+    env:
+      EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_TILE_URL: ${{ vars.EXPO_PUBLIC_TILE_URL }}
+      EXPO_PUBLIC_ROUTING_URL: ${{ vars.EXPO_PUBLIC_ROUTING_URL }}
+      EXPO_PUBLIC_GEOCODING_URL: ${{ vars.EXPO_PUBLIC_GEOCODING_URL }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Check app settings
+        run: |
+          missing=0
+          for name in EXPO_PUBLIC_API_URL EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY; do
+            if [ -z "${!name}" ]; then echo "::error::Missing repository VARIABLE $name (Settings > Secrets and variables > Actions > Variables)"; missing=1; fi
+          done
+          exit $missing
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -32,7 +49,7 @@ jobs:
           java-version: 17
 
       - name: Install Dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Generate Android Project
         run: npx expo prebuild --platform android --non-interactive
