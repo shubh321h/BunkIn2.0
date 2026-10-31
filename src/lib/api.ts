@@ -7,7 +7,7 @@ export async function request<T>(path:string, options:RequestInit={}):Promise<T>
  const session=await supabase?.auth.getSession();
  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),15000);
  try {
-  const response=await fetch(config.apiUrl.replace(/\/$/,'')+path,{...options,headers:{'Content-Type':'application/json',...(session?.data.session?{Authorization:`Bearer ${session.data.session.access_token}`} : {}),...options.headers},signal:controller.signal});
+  const response=await fetch(config.apiUrl.replace(/\/$/,'')+path,{...options,headers:{'Content-Type':'application/json',apikey:config.supabaseKey,...(session?.data.session?{Authorization:`Bearer ${session.data.session.access_token}`} : {}),...options.headers},signal:controller.signal});
   const body=await response.json().catch(()=>null);
   if(!response.ok) throw new ServiceError(body?.message || (response.status===401?'Please sign in to continue.':response.status===403?'You do not have permission to access this workspace.':'The service is unavailable. Please try again.'),response.status);
   return body as T;
