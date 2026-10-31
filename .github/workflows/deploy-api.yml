@@ -1,0 +1,43 @@
+name: Deploy API
+
+# Deploys the BunkIn API (Supabase Edge Function "api"). Run it from the Actions tab, or it runs by itself
+# whenever something under supabase/functions/api changes on main.
+# Needs two repository SECRETS: SUPABASE_ACCESS_TOKEN and SUPABASE_PROJECT_ID.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['supabase/functions/api/**', 'supabase/config.toml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Check secrets
+        run: |
+          [ -n "$SUPABASE_ACCESS_TOKEN" ] || { echo "::error::Add the SUPABASE_ACCESS_TOKEN repository secret"; exit 1; }
+          [ -n "$PROJECT_ID" ] || { echo "::error::Add the SUPABASE_PROJECT_ID repository secret"; exit 1; }
+      - name: Deploy the API
+        run: supabase functions deploy api --no-verify-jwt --project-ref "$PROJECT_ID"
+      - name: Check it is alive
+        run: |
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://${PROJECT_ID}.supabase.co/functions/v1/api/health") && [ "$code" = "200" ] && echo "API is up" && exit 0
+            sleep 6
+          done
+          echo "::warning::Deployed, but the health check did not return 200 yet. Open the function logs in Supabase."
