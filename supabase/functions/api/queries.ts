@@ -6,9 +6,9 @@ export async function loadFoods(sql: Tx, staff: boolean, onlyId?: string): Promi
   const rows = await sql`
     select f.id, c.name as category, f.name, f.description, f.price, f.original_price, f.stock, f.image, f.veg, f.available,
            f.rating, f.review_count, f.tag, f.calories, f.prep_time,
-           coalesce((select jsonb_agg(jsonb_build_object('id', o.id, 'name', o.name, 'price', o.price) order by o.sort_order, o.name)
+           coalesce((select jsonb_agg(jsonb_build_object('id', o.id, 'name', o.name, 'price', o.price) order by o.sort_order, o.price, o.name)
                      from public.food_options o where o.food_id = f.id and o.kind = 'variant' and o.active), '[]'::jsonb) as variants,
-           coalesce((select jsonb_agg(jsonb_build_object('id', o.id, 'name', o.name, 'price', o.price) order by o.sort_order, o.name)
+           coalesce((select jsonb_agg(jsonb_build_object('id', o.id, 'name', o.name, 'price', o.price) order by o.sort_order, o.price, o.name)
                      from public.food_options o where o.food_id = f.id and o.kind = 'addon' and o.active), '[]'::jsonb) as addons
     from public.foods f join public.categories c on c.id = f.category_id
     where f.deleted_at is null and (c.active or ${staff}) and (${onlyId ?? null}::uuid is null or f.id = ${onlyId ?? null}::uuid)
@@ -29,6 +29,7 @@ export async function loadRestaurant(sql: Tx, staff: boolean): Promise<Row> {
     select name, phone, address, branding_image, lat, lng, delivery_fee, tax_rate, minimum_order, preparation_minutes, delivery_radius_km,
            is_open, to_char(opens_at, 'HH24:MI') as opens, to_char(closes_at, 'HH24:MI') as closes,
            coalesce((select string_agg(to_char(d, 'YYYY-MM-DD'), ',' order by d) from unnest(holidays) d), '') as holidays,
+           service_area_label, service_pincodes,
            (is_open
              and not ((now() at time zone timezone)::date = any (holidays))
              and (opens_at is null or closes_at is null
@@ -41,6 +42,7 @@ export async function loadRestaurant(sql: Tx, staff: boolean): Promise<Row> {
     phone: r.phone, deliveryFee: r.delivery_fee, taxRate: r.tax_rate, minimumOrder: r.minimum_order,
     preparationMinutes: r.preparation_minutes, hours: r.opens && r.closes ? `${r.opens}–${r.closes}` : '', holidays: r.holidays,
     radius: r.delivery_radius_km, address: r.address, brandingImage: r.branding_image,
+    serviceAreaLabel: r.service_area_label, servicePincodes: r.service_pincodes,
   };
 }
 
