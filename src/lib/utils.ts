@@ -3,7 +3,7 @@ export const money = (n: number) => '₹' + new Intl.NumberFormat('en-IN',{maxim
 export const linePrice = (line: CartLine) => (line.food.price + line.variant.price + line.addons.reduce((a,x)=>a+x.price,0))*line.quantity;
 export function calculateTotals(lines: CartLine[], coupon?: Coupon, deliveryFee=35, taxRate=.05) {
  const subtotal = Math.round(lines.reduce((sum,line)=>sum+linePrice(line),0)*100)/100;
- const discount = coupon && subtotal>=coupon.minimum ? Math.min(coupon.maxDiscount,coupon.type==='fixed'?coupon.value:subtotal*coupon.value/100) : 0;
+ const discount = coupon && subtotal>=coupon.minimum ? Math.min(subtotal,coupon.maxDiscount,coupon.type==='fixed'?coupon.value:subtotal*coupon.value/100) : 0;
  const tax = Math.round((subtotal-discount)*taxRate*100)/100;
  const delivery = subtotal>0?deliveryFee:0;
  return {subtotal,discount,tax,delivery,total:Math.round((subtotal-discount+tax+delivery)*100)/100};
