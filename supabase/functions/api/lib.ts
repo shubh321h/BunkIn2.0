@@ -15,7 +15,9 @@ export interface AuthPort {
   verify(token: string): Promise<string | null>;
   admin: AdminPort;
 }
-export interface Env { allowedOrigin?: string; onlinePayments?: boolean; rateLimitPerMinute?: number; checkoutsPerMinute?: number }
+/** Looks up what is at a map position. Used to double-check the PIN code a customer sends, so it cannot simply be typed in. */
+export type ReverseGeocoder = (lat: number, lng: number) => Promise<{ postcode?: string } | null>;
+export interface Env { allowedOrigin?: string; onlinePayments?: boolean; rateLimitPerMinute?: number; checkoutsPerMinute?: number; reverseGeocode?: ReverseGeocoder }
 
 export class HttpError extends Error {
   constructor(public status: number, message: string, public code = 'ERROR') { super(message); }
@@ -99,4 +101,4 @@ export function temporaryPassword(): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
   const bytes = crypto.getRandomValues(new Uint8Array(14));
   return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('') + '-7';
-}
+  }
