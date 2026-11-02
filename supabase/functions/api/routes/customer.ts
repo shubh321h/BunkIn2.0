@@ -1,8 +1,10 @@
 import { HttpError, Row, bad, coords, isUuid, num, obj, optStr, phone, str, uuid } from '../lib.ts';
 import type { Ctx, Router } from '../handler.ts';
+import { crossCheckServiceArea, digits } from '../serviceArea.ts';
 
 const profileJson = (p: Row) => ({ id: p.id, name: p.name, email: p.email, phone: p.phone, role: p.role, mustChangePassword: p.must_change_password });
-const addressJson = (a: Row) => ({ id: a.id, label: a.label, line: a.line, area: a.area, contact: a.contact, phone: a.phone, location: { lat: a.lat, lng: a.lng } });
+const addressJson = (a: Row) => ({ id: a.id, label: a.label, line: a.line, area: a.area, city: a.city, pincode: a.pincode, contact: a.contact, phone: a.phone, location: { lat: a.lat, lng: a.lng } });
+const pincodeOf = (x: unknown) => { const p = digits(x); if (!/^\d{6}$/.test(p)) throw bad('Enter the 6-digit PIN code of this address.', 'INVALID_ADDRESS'); return p; };
 
 async function orderFor(c: Ctx, id: string) {
   const [row] = await c.sql`select public.order_json(${id}::uuid, ${c.me().id}::uuid) as o`;
@@ -38,14 +40,18 @@ export function customerRoutes(r: Router) {
     const contact = str(b.contact, 'Contact name', { min: 2, max: 80 });
     const ph = phone(b.phone, 'Contact phone');
     const { lat, lng } = coords(b.location, 'Delivery');
+    const pin = pincodeOf(b.pincode); const city = optStr(b.city, 'City', { max: 80 });
     const me = c.me().id;
+    // An address we cannot deliver to is never saved, so it can never be picked at checkout.
+    await c.sql`select public.assert_service_area(${lat}, ${lng}, ${pin})`;
+    await crossCheckServiceArea(c.sql, c.env, lat, lng, c.requestId);
     if (isUuid(b.id)) {
-      const [a] = await c.sql`update public.addresses set label = ${label}, line = ${line}, area = ${area}, contact = ${contact}, phone = ${ph}, lat = ${lat}, lng = ${lng}
+      const [a] = await c.sql`update public.addresses set label = ${label}, line = ${line}, area = ${area}, city = ${city}, pincode = ${pin}, contact = ${contact}, phone = ${ph}, lat = ${lat}, lng = ${lng}
         where id = ${b.id}::uuid and user_id = ${me}::uuid returning *`;
       if (a) return addressJson(a);
     }
-    const [a] = await c.sql`insert into public.addresses (user_id, label, line, area, contact, phone, lat, lng)
-      values (${me}::uuid, ${label}, ${line}, ${area}, ${contact}, ${ph}, ${lat}, ${lng}) returning *`;
+    const [a] = await c.sql`insert into public.addresses (user_id, label, line, area, city, pincode, contact, phone, lat, lng)
+      values (${me}::uuid, ${label}, ${line}, ${area}, ${city}, ${pin}, ${contact}, ${ph}, ${lat}, ${lng}) returning *`;
     return c.reply(addressJson(a), 201);
   });
   r.add('DELETE', '/me/addresses/:id', 'user', async (c) => {
@@ -87,7 +93,9 @@ export function customerRoutes(r: Router) {
     });
     const a = obj(b.address);
     const address = { label: optStr(a.label, 'Label', { max: 30 }), line: str(a.line, 'Address', { min: 5, max: 200 }), area: optStr(a.area, 'Area', { max: 120 }),
+      city: optStr(a.city, 'City', { max: 80 }), pincode: pincodeOf(a.pincode),
       contact: str(a.contact, 'Contact name', { min: 2, max: 80 }), phone: phone(a.phone, 'Contact phone'), location: coords(a.location, 'Delivery') };
+    await crossCheckServiceArea(c.sql, c.env, address.location.lat, address.location.lng, c.requestId);   // place_order then enforces PIN + radius in the database
     const coupon = b.coupon ? str(b.coupon, 'Coupon', { max: 24 }).toUpperCase() : null;
     const instructions = optStr(b.instructions, 'Instructions', { max: 300 });
     const key = str(b.idempotencyKey, 'Order reference', { min: 8, max: 100 });
