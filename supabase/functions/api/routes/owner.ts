@@ -50,11 +50,20 @@ export function ownerRoutes(r: Router) {
     const radius = b.radius === undefined ? cur.delivery_radius_km : num(b.radius, 'Delivery radius', { min: 0.1, max: 50 });
     const hours = b.hours === undefined ? { opens: cur.opens, closes: cur.closes } : parseHours(b.hours);
     const holidays = b.holidays === undefined ? cur.holidays : parseHolidays(b.holidays);
+    let pins: string[] | null = null;
+    if (b.servicePincodes !== undefined) {
+      const list = (Array.isArray(b.servicePincodes) ? b.servicePincodes : String(b.servicePincodes).split(/[,\s]+/)).map((x: unknown) => String(x).trim()).filter(Boolean);
+      if (list.some((p: string) => !/^\d{6}$/.test(p)) || list.length > 20) throw bad('PIN codes must be 6 digits each, separated by commas.');
+      pins = [...new Set<string>(list)];
+    }
+    const areaLabel = b.serviceAreaLabel === undefined ? null : str(b.serviceAreaLabel, 'Service area name', { min: 3, max: 120 });
     if (open && loc.lat === 0 && loc.lng === 0) throw bad('Set the restaurant location before opening for orders.');
     await c.sql`update public.restaurant set name = ${name}, phone = ${ph}, address = ${address}, branding_image = ${branding}, lat = ${loc.lat}, lng = ${loc.lng},
       is_open = ${open}, delivery_fee = ${fee}, tax_rate = ${tax}, minimum_order = ${minimum}, preparation_minutes = ${prep}, delivery_radius_km = ${radius},
       opens_at = ${hours.opens}::time, closes_at = ${hours.closes}::time,
-      holidays = (select coalesce(array_agg(d::date), '{}') from jsonb_array_elements_text(${JSON.stringify(holidays)}::text::jsonb) d)`;
+      holidays = (select coalesce(array_agg(d::date), '{}') from jsonb_array_elements_text(${JSON.stringify(holidays)}::text::jsonb) d),
+      service_pincodes = case when ${pins !== null} then coalesce((select array_agg(p) from jsonb_array_elements_text(${JSON.stringify(pins ?? [])}::text::jsonb) p), '{}'::text[]) else service_pincodes end,
+      service_area_label = coalesce(${areaLabel}, service_area_label)`;
     await c.sql`insert into public.audit_log (actor_id, action, entity, details) values (${c.me().id}::uuid, 'settings.update', 'restaurant', ${JSON.stringify({ fields: Object.keys(b) })}::text::jsonb)`;
     return loadRestaurant(c.sql, true);
   });
