@@ -33,5 +33,17 @@ const auth: AuthPort = {
   },
 };
 
-const handle = createApi({ sql, auth, env: { allowedOrigin: env('ALLOWED_ORIGIN'), onlinePayments: false } });
+// Double-checks the PIN code at a map position with an OpenStreetMap geocoder (Nominatim-compatible). Light use only:
+// one lookup per saved address or order. For heavy traffic point GEOCODER_REVERSE_URL at your own or a paid provider.
+const reverseUrl = env('GEOCODER_REVERSE_URL') ?? 'https://nominatim.openstreetmap.org/reverse';
+const userAgent = env('GEOCODER_USER_AGENT') ?? 'BunkInDelivery/1.0 (service-area check)';
+async function reverseGeocode(lat: number, lng: number) {
+  const url = `${reverseUrl}?format=jsonv2&addressdetails=1&zoom=18&lat=${lat}&lon=${lng}`;
+  const res = await fetch(url, { headers: { 'User-Agent': userAgent, 'Accept-Language': 'en' }, signal: AbortSignal.timeout(3000) });
+  if (!res.ok) throw new Error(`geocoder ${res.status}`);
+  const data = await res.json();
+  return { postcode: typeof data?.address?.postcode === 'string' ? data.address.postcode : undefined };
+}
+
+const handle = createApi({ sql, auth, env: { allowedOrigin: env('ALLOWED_ORIGIN'), onlinePayments: false, reverseGeocode } });
 Deno.serve(handle);
