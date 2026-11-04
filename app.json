@@ -22,6 +22,18 @@
             "backgroundColor": "#18211C"
           }
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#156449"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "BunkIn needs your photos so the restaurant can add pictures of its dishes."
+        }
       ]
     ],
     "version": "1.0.0",
@@ -35,7 +47,8 @@
       "package": "com.bunkin.app",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#156449",
@@ -43,7 +56,11 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
