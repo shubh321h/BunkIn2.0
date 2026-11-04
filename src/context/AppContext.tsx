@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, Platform, useColorScheme } from 'react-native';
 import * as Linking from 'expo-linking';
 import { api } from '../lib/api';
+import { disablePush, refreshPushToken } from '../lib/push';
 import { supabase } from '../lib/supabase';
 import { authLinkProblem, parseAuthLink } from '../lib/authLinks';
 import { addToCartLines, DEFAULT_SPICE, defaultVariant, reconcileCart, setLineQuantity } from '../lib/cart';
@@ -41,6 +42,7 @@ export function AppProvider({children}:{children:React.ReactNode}){
  return()=>{active=false;authSubscription?.data.subscription.unsubscribe();appSubscription.remove();urlSubscription.remove();if(timer.current)clearTimeout(timer.current);};},[]);
  useEffect(()=>{if(hydrated)AsyncStorage.setItem('bunkin-local-v1',JSON.stringify({cart,favorites,selectedAddress,theme})).catch(()=>notify('Could not save changes on this device.','error'));},[cart,favorites,selectedAddress,theme,hydrated]);
  useEffect(()=>{cartRef.current=cart;},[cart]);
+ useEffect(()=>{if(profile?.role==='customer'&&profile.marketingOptIn!==false)void refreshPushToken();},[profile?.id,profile?.marketingOptIn]);
  // Keep a saved bag in step with the live menu (prices, removed dishes, sold-out items). Only after the menu loaded.
  useEffect(()=>{if(!hydrated||loading||error||!foods.length)return;const result=reconcileCart(cartRef.current,foods);const sig=(l:CartLine[])=>JSON.stringify(l.map(x=>[x.key,x.quantity,x.food.price,x.food.available,x.food.stock,x.variant.price,x.addons.map(a=>a.price)]));if(sig(result.cart)!==sig(cartRef.current)){cartRef.current=result.cart;setCart(result.cart);}if(result.notes.length)notify(result.notes[0],'info');},[foods,hydrated,loading,error]);
  const addToCart=(food:Food,quantity=1,variant:Option|undefined=defaultVariant(food),addons:Option[]=[],spice=DEFAULT_SPICE,instructions='')=>{
@@ -54,6 +56,6 @@ export function AppProvider({children}:{children:React.ReactNode}){
  cartRef.current=result.cart;setCart(result.cart);
  };
  const saveAddress=async(address:Address)=>{const saved=await api.saveAddress(address);setAddresses(old=>[...old.filter(a=>a.id!==saved.id),saved]);setSelectedAddress(saved.id);notify('Delivery address saved.','success');};
- const signOut=async()=>{if(supabase){const {error}=await supabase.auth.signOut();if(error)throw error;}setProfile(null);setCart([]);setCoupon(undefined);setAddresses([]);notify('You have been signed out.');};
+ const signOut=async()=>{if(profile?.role==='customer')await disablePush();if(supabase){const {error}=await supabase.auth.signOut();if(error)throw error;}setProfile(null);setCart([]);setCoupon(undefined);setAddresses([]);notify('You have been signed out.');};
  return <Context.Provider value={{foods,restaurant,offers,offersError,loading,error,refresh,cart,addToCart,updateQuantity,clearCart:()=>{cartRef.current=[];setCart([]);setCoupon(undefined);},favorites,toggleFavorite:(id)=>setFavorites(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]),addresses,address:addresses.find(a=>a.id===selectedAddress)||addresses[0]||{id:'',label:'Home',line:'Choose a delivery address',area:'Set your location',contact:'',phone:'',location:restaurant.location},selectAddress:setSelectedAddress,saveAddress,coupon,setCoupon,profile,setProfile,sessionReady,signOut,toast,notify,modal,setModal,theme,setTheme}}>{children}</Context.Provider>;
-                                  }
+}
