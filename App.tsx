@@ -10,6 +10,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { Shell } from './src/components/Shell';
 import GlobalDialogs from './src/components/GlobalDialogs';
+import { configureNotifications } from './src/lib/push';
 import { Icon, Txt, useColors } from './src/components/ui';
 import { appConfigured, missingConfig } from './src/lib/config';
 
@@ -27,6 +28,8 @@ function AppFrame({ children }: { children: React.ReactNode }) {
     </Animated.View>}
   </SafeAreaView>;
 }
+configureNotifications();
+
 export default function App({ children }: { children?: React.ReactNode }) {
   const [fontsLoaded, fontError] = useFonts({ ...Ionicons.font,
     Jakarta: require('./assets/fonts/Jakarta-Regular.ttf'),
@@ -45,4 +48,3 @@ export default function App({ children }: { children?: React.ReactNode }) {
   if (!fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: '#F7F8F5', alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color="#156449" size="large" /></View>;
   return <GestureHandlerRootView style={{ flex: 1 }}><SafeAreaProvider><AppProvider><AppFrame>{children}</AppFrame></AppProvider></SafeAreaProvider></GestureHandlerRootView>;
 }
-
