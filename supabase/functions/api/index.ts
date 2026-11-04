@@ -7,7 +7,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { createApi } from './handler.ts';
 import { makeDb } from './db.ts';
-import type { AuthPort } from './lib.ts';
+import { createFcmSender } from './push.ts';
+import type { AuthPort, PushSender, StoragePort } from './lib.ts';
 
 declare const Deno: { env: { get(name: string): string | undefined }; serve(handler: (req: Request) => Response | Promise<Response>): void };
 const env = (name: string) => Deno.env.get(name);
@@ -45,5 +46,18 @@ async function reverseGeocode(lat: number, lng: number) {
   return { postcode: typeof data?.address?.postcode === 'string' ? data.address.postcode : undefined };
 }
 
-const handle = createApi({ sql, auth, env: { allowedOrigin: env('ALLOWED_ORIGIN'), onlinePayments: false, reverseGeocode } });
+// Dish photos go to the public "dish-images" bucket (created by the database migration). Only this function can write to it.
+const storage: StoragePort = {
+  async upload(path, bytes, contentType) {
+    const { error } = await admin.storage.from('dish-images').upload(path, bytes, { contentType, upsert: false, cacheControl: '31536000' });
+    if (error) { console.error(JSON.stringify({ level: 'error', event: 'storage_upload', message: error.message.slice(0, 160) })); return null; }
+    return admin.storage.from('dish-images').getPublicUrl(path).data.publicUrl;
+  },
+};
+// Phone notifications need a Firebase service account (secret FCM_SERVICE_ACCOUNT_JSON). Without it offers still reach the in-app inbox.
+let push: PushSender | undefined;
+const fcmJson = env('FCM_SERVICE_ACCOUNT_JSON');
+if (fcmJson) { try { push = createFcmSender({ serviceAccountJson: fcmJson }); } catch (e) { console.error(JSON.stringify({ level: 'error', event: 'fcm_config', message: String((e as Error).message).slice(0, 160) })); } }
+
+const handle = createApi({ sql, auth, storage, env: { allowedOrigin: env('ALLOWED_ORIGIN'), onlinePayments: false, reverseGeocode, push } });
 Deno.serve(handle);
