@@ -1,8 +1,8 @@
-import { HttpError, Row, bad, coords, isUuid, num, obj, optStr, phone, str, uuid } from '../lib.ts';
+import { HttpError, Row, bad, bool, coords, isUuid, num, obj, optStr, phone, str, uuid } from '../lib.ts';
 import type { Ctx, Router } from '../handler.ts';
 import { crossCheckServiceArea, digits } from '../serviceArea.ts';
 
-const profileJson = (p: Row) => ({ id: p.id, name: p.name, email: p.email, phone: p.phone, role: p.role, mustChangePassword: p.must_change_password });
+const profileJson = (p: Row) => ({ id: p.id, name: p.name, email: p.email, phone: p.phone, role: p.role, mustChangePassword: p.must_change_password, marketingOptIn: p.marketing_opt_in });
 const addressJson = (a: Row) => ({ id: a.id, label: a.label, line: a.line, area: a.area, city: a.city, pincode: a.pincode, contact: a.contact, phone: a.phone, location: { lat: a.lat, lng: a.lng } });
 const pincodeOf = (x: unknown) => { const p = digits(x); if (!/^\d{6}$/.test(p)) throw bad('Enter the 6-digit PIN code of this address.', 'INVALID_ADDRESS'); return p; };
 
@@ -15,16 +15,36 @@ async function orderFor(c: Ctx, id: string) {
 export function customerRoutes(r: Router) {
   // ---- account
   r.add('GET', '/me', 'user', async (c) => {
-    const [p] = await c.sql`select id, name, email, phone, role::text as role, must_change_password from public.profiles where id = ${c.me().id}::uuid`;
+    const [p] = await c.sql`select id, name, email, phone, role::text as role, must_change_password, marketing_opt_in from public.profiles where id = ${c.me().id}::uuid`;
     return profileJson(p);
   });
   r.add('PATCH', '/me', 'user', async (c) => {
     const b = await c.json();
     const name = b.name === undefined ? null : str(b.name, 'Name', { min: 2, max: 80 });
     const ph = b.phone === undefined || b.phone === '' ? null : phone(b.phone);
-    const [p] = await c.sql`update public.profiles set name = coalesce(${name}, name), phone = coalesce(${ph}, phone)
-      where id = ${c.me().id}::uuid returning id, name, email, phone, role::text as role, must_change_password`;
+    const marketing = b.marketingOptIn === undefined ? null : bool(b.marketingOptIn, 'Offers');
+    const [p] = await c.sql`update public.profiles set name = coalesce(${name}, name), phone = coalesce(${ph}, phone), marketing_opt_in = coalesce(${marketing}, marketing_opt_in)
+      where id = ${c.me().id}::uuid returning id, name, email, phone, role::text as role, must_change_password, marketing_opt_in`;
+    if (marketing === false) await c.sql`delete from public.push_tokens where user_id = ${c.me().id}::uuid`;   // offers off: forget this person's devices
     return profileJson(p);
+  });
+
+  // ---- phone notifications: a device registers its token so the restaurant can send offers
+  r.add('POST', '/me/push-token', 'user', async (c) => {
+    c.limit('push-token', 20);
+    const b = await c.json(); const me = c.me().id;
+    const token = str(b.token, 'Device token', { min: 20, max: 4096 });
+    if (/\s/.test(token)) throw bad('That device token is not valid.');
+    const platform = b.platform === 'ios' || b.platform === 'web' ? b.platform : 'android';
+    await c.sql`insert into public.push_tokens (token, user_id, platform) values (${token}, ${me}::uuid, ${platform})
+      on conflict (token) do update set user_id = excluded.user_id, platform = excluded.platform, last_seen = now()`;
+    await c.sql`delete from public.push_tokens where user_id = ${me}::uuid and token not in (select token from public.push_tokens where user_id = ${me}::uuid order by last_seen desc limit 5)`;
+    return c.reply({ ok: true }, 201);
+  });
+  r.add('POST', '/me/push-token/remove', 'user', async (c) => {
+    const b = await c.json();
+    await c.sql`delete from public.push_tokens where token = ${str(b.token, 'Device token', { min: 20, max: 4096 })} and user_id = ${c.me().id}::uuid`;
+    return { ok: true };
   });
 
   // ---- addresses
