@@ -1,19 +1,22 @@
 // The BunkIn API: authentication, routing, rate limits and error handling. Business rules live in the database.
-import { AuthPort, Db, Env, HttpError, Role, Row, bad, corsHeaders, fromDbError, respond } from './lib.ts';
+import { AuthPort, Db, Env, HttpError, Role, Row, StoragePort, bad, corsHeaders, fromDbError, respond } from './lib.ts';
 import { publicRoutes } from './routes/public.ts';
 import { customerRoutes } from './routes/customer.ts';
 import { kitchenRoutes } from './routes/kitchen.ts';
 import { ownerRoutes } from './routes/owner.ts';
 import { riderRoutes } from './routes/rider.ts';
+import { offerRoutes } from './routes/offers.ts';
+import { uploadRoutes } from './routes/uploads.ts';
 import { staffRoutes } from './routes/staff.ts';
 
 export interface User { id: string; role: Role; name: string; email: string; phone: string; mustChangePassword: boolean }
 export interface Ctx {
-  sql: Db; auth: AuthPort; env: Env; req: Request; url: URL; params: Record<string, string>;
+  sql: Db; auth: AuthPort; storage?: StoragePort; env: Env; req: Request; url: URL; params: Record<string, string>;
   user: User | null; requestId: string;
   /** The signed-in user (routes that need one are guarded, so this never throws for them). */
   me(): User;
-  json(): Promise<Row>;
+  /** Reads the JSON body. Normal requests are capped at 64 KB; routes that accept a photo ask for more. */
+  json(maxBytes?: number): Promise<Row>;
   reply(data: unknown, status?: number): Response;
   /** Per-user (or per-IP) limit for expensive actions. Throws 429 when exceeded. */
   limit(name: string, max: number): void;
@@ -27,8 +30,8 @@ interface Route { method: string; re: RegExp; keys: string[]; access: Access; ru
 const MAX_BODY = 64 * 1024;
 const ALLOWED_WHILE_PASSWORD_UNCHANGED = new Set(['GET /me', 'POST /me/password-changed']);
 
-export function createApi(deps: { sql: Db; auth: AuthPort; env?: Env }) {
-  const { sql, auth } = deps; const env = deps.env ?? {};
+export function createApi(deps: { sql: Db; auth: AuthPort; storage?: StoragePort; env?: Env }) {
+  const { sql, auth, storage } = deps; const env = deps.env ?? {};
   const routes: Route[] = [];
   const router: Router = {
     add(method, path, access, run) {
@@ -37,7 +40,7 @@ export function createApi(deps: { sql: Db; auth: AuthPort; env?: Env }) {
       routes.push({ method, re, keys, access, run });
     },
   };
-  for (const register of [publicRoutes, customerRoutes, kitchenRoutes, ownerRoutes, riderRoutes, staffRoutes]) register(router);
+  for (const register of [publicRoutes, customerRoutes, kitchenRoutes, ownerRoutes, offerRoutes, uploadRoutes, riderRoutes, staffRoutes]) register(router);
 
   const hits = new Map<string, { n: number; reset: number }>();
   function limited(key: string, max: number, windowMs = 60_000): boolean {
@@ -92,11 +95,11 @@ export function createApi(deps: { sql: Db; auth: AuthPort; env?: Env }) {
       }
 
       const ctx: Ctx = {
-        sql, auth, env, req, url, params, user, requestId,
+        sql, auth, storage, env, req, url, params, user, requestId,
         me() { if (!user) throw new HttpError(401, 'Please sign in to continue.', 'UNAUTHENTICATED'); return user; },
-        async json() {
+        async json(maxBytes = MAX_BODY) {
           const text = await req.text();
-          if (text.length > MAX_BODY) throw new HttpError(413, 'That request is too large.', 'TOO_LARGE');
+          if (text.length > maxBytes) throw new HttpError(413, 'That request is too large.', 'TOO_LARGE');
           if (!text.trim()) return {};
           try { const v = JSON.parse(text); if (!v || typeof v !== 'object' || Array.isArray(v)) throw 0; return v as Row; }
           catch { throw bad('The request could not be read.'); }
