@@ -17,7 +17,14 @@ export interface AuthPort {
 }
 /** Looks up what is at a map position. Used to double-check the PIN code a customer sends, so it cannot simply be typed in. */
 export type ReverseGeocoder = (lat: number, lng: number) => Promise<{ postcode?: string } | null>;
-export interface Env { allowedOrigin?: string; onlinePayments?: boolean; rateLimitPerMinute?: number; checkoutsPerMinute?: number; reverseGeocode?: ReverseGeocoder }
+/** Sends a phone notification to many devices. `invalid` lists device tokens that no longer exist and should be forgotten. */
+export interface PushSender {
+  configured: boolean;
+  send(tokens: string[], message: { title: string; body: string; data?: Record<string, string> }): Promise<{ sent: number; failed: number; invalid: string[] }>;
+}
+/** Public file storage for dish photos. Returns the public https address, or null on failure. */
+export interface StoragePort { upload(path: string, bytes: Uint8Array, contentType: string): Promise<string | null> }
+export interface Env { allowedOrigin?: string; push?: PushSender; onlinePayments?: boolean; rateLimitPerMinute?: number; checkoutsPerMinute?: number; reverseGeocode?: ReverseGeocoder }
 
 export class HttpError extends Error {
   constructor(public status: number, message: string, public code = 'ERROR') { super(message); }
@@ -27,7 +34,7 @@ export const bad = (message: string, code = 'INVALID_REQUEST') => new HttpError(
 const STATUS: Record<string, number> = {
   BAD_IDEMPOTENCY_KEY: 400, EMPTY_CART: 400, INVALID_ITEM: 400, INVALID_OPTION: 400, INVALID_ADDRESS: 400, INVALID_COUPON: 400,
   REASON_REQUIRED: 400, INVALID_RATING: 400, INVALID_TIMEZONE: 400, FORBIDDEN: 403, ACCOUNT_DISABLED: 403, NOT_FOUND: 404,
-  STALE_LOCATION: 422, RATE_LIMITED: 429, SUPPORT_LIMIT: 429, OTP_LOCKED: 429,
+  STALE_LOCATION: 422, RATE_LIMITED: 429, SUPPORT_LIMIT: 429, OTP_LOCKED: 429, OFFER_LIMIT: 429, OFFER_INVALID: 400,
 };
 
 /** Turn a database error into something safe to show. Unknown errors become a generic 500 (and are logged). */
@@ -101,4 +108,4 @@ export function temporaryPassword(): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
   const bytes = crypto.getRandomValues(new Uint8Array(14));
   return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('') + '-7';
-  }
+}
