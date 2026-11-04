@@ -29,7 +29,7 @@ export async function loadRestaurant(sql: Tx, staff: boolean): Promise<Row> {
     select name, phone, address, branding_image, lat, lng, delivery_fee, tax_rate, minimum_order, preparation_minutes, delivery_radius_km,
            is_open, to_char(opens_at, 'HH24:MI') as opens, to_char(closes_at, 'HH24:MI') as closes,
            coalesce((select string_agg(to_char(d, 'YYYY-MM-DD'), ',' order by d) from unnest(holidays) d), '') as holidays,
-           service_area_label, service_pincodes,
+           service_area_label, service_pincodes, free_delivery_above,
            (is_open
              and not ((now() at time zone timezone)::date = any (holidays))
              and (opens_at is null or closes_at is null
@@ -42,7 +42,7 @@ export async function loadRestaurant(sql: Tx, staff: boolean): Promise<Row> {
     phone: r.phone, deliveryFee: r.delivery_fee, taxRate: r.tax_rate, minimumOrder: r.minimum_order,
     preparationMinutes: r.preparation_minutes, hours: r.opens && r.closes ? `${r.opens}–${r.closes}` : '', holidays: r.holidays,
     radius: r.delivery_radius_km, address: r.address, brandingImage: r.branding_image,
-    serviceAreaLabel: r.service_area_label, servicePincodes: r.service_pincodes,
+    serviceAreaLabel: r.service_area_label, servicePincodes: r.service_pincodes, freeDeliveryAbove: r.free_delivery_above ?? null,
   };
 }
 
