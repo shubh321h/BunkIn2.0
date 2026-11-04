@@ -2,7 +2,7 @@ name: Deploy API
 
 # Deploys the BunkIn API (Supabase Edge Function "api"). Run it from the Actions tab, or it runs by itself
 # whenever something under supabase/functions/api changes on main.
-# Needs. two repository SECRETS: SUPABASE_ACCESS_TOKEN and SUPABASE_PROJECT_ID.
+# Needs two repository SECRETS: SUPABASE_ACCESS_TOKEN and SUPABASE_PROJECT_ID.
 on:
   workflow_dispatch:
   push:
@@ -33,7 +33,7 @@ jobs:
           [ -n "$SUPABASE_ACCESS_TOKEN" ] || { echo "::error::Add the SUPABASE_ACCESS_TOKEN repository secret"; exit 1; }
           [ -n "$PROJECT_ID" ] || { echo "::error::Add the SUPABASE_PROJECT_ID repository secret"; exit 1; }
       - name: Deploy the API
-        run: supabase functions deploy api --no-verify-jwt --project-ref "$PROJECT_ID"
+        run: supabase functions deploy api --no-verify-jwt --yes --project-ref "$PROJECT_ID"
       - name: Check it is alive
         run: |
           for i in 1 2 3 4 5; do
