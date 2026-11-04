@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from 'react';
-import { Linking, View } from 'react-native';
+import { Linking, Platform, View } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useApp } from '../context/AppContext';
@@ -8,6 +9,7 @@ import { messageOf } from '../lib/utils';
 import AddressSheet from './AddressSheet';
 import { Button, EmptyState, Field, Icon, Notice, Panel, Sheet, Txt, useColors } from './ui';
 export default function GlobalDialogs(){const {modal,setModal,addresses,address,selectAddress,saveAddress,restaurant,notify,profile}=useApp();const c=useColors();const [error,setError]=useState('');const [busy,setBusy]=useState(false);const [subject,setSubject]=useState('Order help');const [message,setMessage]=useState('');const [notifications,setNotifications]=useState<{id:string;title:string;body:string}[]>([]);const [welcome,setWelcome]=useState(0);
+ useEffect(()=>{if(Platform.OS==='web')return;const sub=Notifications.addNotificationResponseReceivedListener(()=>setModal('notifications'));return()=>sub.remove();},[]);
  useEffect(()=>{setError('');if(modal==='notifications'){setBusy(true);api.notifications().then(setNotifications).catch(e=>setError(messageOf(e))).finally(()=>setBusy(false));}},[modal]);
  const close=()=>{if(modal==='welcome')AsyncStorage.setItem('bunkin-onboarded','true').catch(()=>{});setModal(null);};
     const support=async()=>{if(message.trim().length<10){setError('Please include at least 10 characters so we can help.');return;}setBusy(true);setError('');try{const ticket=await api.support(subject,message);notify(`Support request ${ticket.id} received.`,'success');setMessage('');close();}catch(e){setError(messageOf(e));}finally{setBusy(false);}};
