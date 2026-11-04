@@ -1,6 +1,6 @@
 import { config } from './config';
 import { supabase } from './supabase';
-import { Address, Analytics, CheckoutRequest, CheckoutResult, Coordinates, Coupon, Food, MenuCategory, Order, OrderStatus, OwnerRecord, Profile, Restaurant, StaffCredentials, StaffMember, StaffRole } from './types';
+import { Address, Analytics, CheckoutRequest, CheckoutResult, Coordinates, Coupon, Food, MenuCategory, Order, OrderStatus, OfferAudience, OfferBroadcast, OfferSendResult, OwnerRecord, Profile, Restaurant, StaffCredentials, StaffMember, StaffRole } from './types';
 export class ServiceError extends Error { constructor(message: string, public status=0) { super(message);this.name='ServiceError'; } }
 export async function request<T>(path:string, options:RequestInit={}):Promise<T> {
  if(!config.apiUrl) throw new ServiceError('BunkIn is not connected to its service. Please contact the restaurant.',503);
@@ -26,6 +26,8 @@ export const api={
  review:(id:string,rating:number,comment:string)=>post<void>(`/orders/${encodeURIComponent(id)}/review`,{rating,comment}),
  profile:()=>request<Profile>('/me'),
  passwordChanged:()=>post<Profile>('/me/password-changed',{}),
+ registerPushToken:(token:string,platform:string)=>post<{ok:boolean}>('/me/push-token',{token,platform}),
+ removePushToken:(token:string)=>post<{ok:boolean}>('/me/push-token/remove',{token}),
  updateProfile:(data:Partial<Profile>)=>patch<Profile>('/me',data),
  addresses:()=>request<Address[]>('/me/addresses'),
  saveAddress:(address:Address)=>post<Address>('/me/addresses',address),
@@ -41,6 +43,10 @@ export const api={
   refund:(id:string,reason:string)=>post<Order>(`/owner/orders/${encodeURIComponent(id)}/refund`,{reason}),
   reconcile:(id:string)=>post<void>(`/owner/orders/${encodeURIComponent(id)}/cod-reconciliation`,{}),
   customers:()=>request<{id:string;name:string;email:string;orderCount:number}[]>('/owner/customers'),
+  offersAudience:()=>request<OfferAudience>('/owner/offers/audience'),
+  broadcasts:()=>request<OfferBroadcast[]>('/owner/offers/broadcasts'),
+  sendOffer:(data:{title:string;message:string;couponCode?:string})=>post<OfferSendResult>('/owner/offers/broadcast',data),
+  uploadImage:(data:string)=>post<{url:string}>('/owner/uploads/image',{data}),
   staff:()=>request<StaffMember[]>('/owner/staff'),
   createStaff:(data:{name:string;email:string;phone:string;role:StaffRole})=>post<StaffCredentials>('/owner/staff',data),
   updateStaff:(id:string,data:{active?:boolean;resetPassword?:boolean})=>patch<StaffCredentials>(`/owner/staff/${encodeURIComponent(id)}`,data),
