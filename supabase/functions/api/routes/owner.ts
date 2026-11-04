@@ -56,6 +56,8 @@ export function ownerRoutes(r: Router) {
       if (list.some((p: string) => !/^\d{6}$/.test(p)) || list.length > 20) throw bad('PIN codes must be 6 digits each, separated by commas.');
       pins = [...new Set<string>(list)];
     }
+    let freeAbove: number | null | undefined; // undefined = leave as is, null = never free
+    if (b.freeDeliveryAbove !== undefined) freeAbove = b.freeDeliveryAbove === null || b.freeDeliveryAbove === '' ? null : num(b.freeDeliveryAbove, 'Free delivery above', { min: 0, max: 100000 });
     const areaLabel = b.serviceAreaLabel === undefined ? null : str(b.serviceAreaLabel, 'Service area name', { min: 3, max: 120 });
     if (open && loc.lat === 0 && loc.lng === 0) throw bad('Set the restaurant location before opening for orders.');
     await c.sql`update public.restaurant set name = ${name}, phone = ${ph}, address = ${address}, branding_image = ${branding}, lat = ${loc.lat}, lng = ${loc.lng},
@@ -63,7 +65,8 @@ export function ownerRoutes(r: Router) {
       opens_at = ${hours.opens}::time, closes_at = ${hours.closes}::time,
       holidays = (select coalesce(array_agg(d::date), '{}') from jsonb_array_elements_text(${JSON.stringify(holidays)}::text::jsonb) d),
       service_pincodes = case when ${pins !== null} then coalesce((select array_agg(p) from jsonb_array_elements_text(${JSON.stringify(pins ?? [])}::text::jsonb) p), '{}'::text[]) else service_pincodes end,
-      service_area_label = coalesce(${areaLabel}, service_area_label)`;
+      service_area_label = coalesce(${areaLabel}, service_area_label),
+      free_delivery_above = case when ${freeAbove !== undefined} then ${freeAbove ?? null}::numeric else free_delivery_above end`;
     await c.sql`insert into public.audit_log (actor_id, action, entity, details) values (${c.me().id}::uuid, 'settings.update', 'restaurant', ${JSON.stringify({ fields: Object.keys(b) })}::text::jsonb)`;
     return loadRestaurant(c.sql, true);
   });
